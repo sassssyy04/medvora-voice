@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice API Client Example</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .control-group {
+      margin: 20px 0;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background-color: #007bff;
+      color: white;
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    button.danger {
+      background-color: #dc3545;
+    }
+    button.success {
+      background-color: #28a745;
+    }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+    }
+    .transcription {
+      background-color: #e7f3ff;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 4px;
+    }
+    .response {
+      background-color: #f0f8ff;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 4px;
+    }
+    input {
+      padding: 8px;
+      margin: 5px;
+      width: 300px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    select {
+      padding: 8px;
+      margin: 5px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .recording {
+      color: red;
+      font-weight: bold;
+    }
+    #conversationHistory {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f5f5f5;
+      border-radius: 4px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .message {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .user-message {
+      background-color: #d1e7dd;
+      text-align: right;
+    }
+    .assistant-message {
+      background-color: #cfe2ff;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <h1>Voice API Client Example</h1>
+  
+  <div class="control-group">
+    <h2>1. Initialize Session</h2>
+    <input type="text" id="osceId" placeholder="Enter OSCE ID" value="">
+    <select id="gender">
+      <option value="Male">Male</option>
+      <option value="Female">Female</option>
+    </select>
+    <button id="initBtn" onclick="initSession()">Initialize Session</button>
+    <div class="status" id="initStatus">Not initialized</div>
+  </div>
+
+  <div class="control-group">
+    <h2>2. Start Session</h2>
+    <button id="startBtn" onclick="startSession()" disabled>Start Session</button>
+    <div class="status" id="startStatus">Session not started</div>
+  </div>
+
+  <div class="control-group">
+    <h2>3. Record & Send Audio</h2>
+    <button id="recordBtn" onclick="startRecording()" disabled class="success">🎤 Start Recording</button>
+    <button id="stopRecordBtn" onclick="stopRecording()" disabled class="danger">⏹ Stop Recording</button>
+    <button id="sendBtn" onclick="sendAudio()" disabled>📤 Send Audio</button>
+    <div class="status" id="recordStatus">Not recording</div>
+    <div class="transcription" id="transcription" style="display:none;"></div>
+    <div class="response" id="response" style="display:none;"></div>
+  </div>
+
+  <div class="control-group">
+    <h2>4. Stop Session</h2>
+    <button id="stopBtn" onclick="stopSession()" disabled class="danger">Stop Session</button>
+    <div class="status" id="stopStatus"></div>
+  </div>
+
+  <div class="control-group">
+    <h2>Conversation History</h2>
+    <button onclick="getHistory()">Refresh History</button>
+    <div id="conversationHistory"></div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:8001';
+    let sessionId = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let audioBlob = null;
+
+    async function initSession() {
+      const osceId = document.getElementById('osceId').value;
+      const gender = document.getElementById('gender').value;
+
+      if (!osceId) {
+        alert('Please enter an OSCE ID');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/voice/init`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gender, osce_id: osceId })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          sessionId = data.session_id;
+          document.getElementById('initStatus').textContent = `✅ Session initialized: ${sessionId}`;
+          document.getElementById('startBtn').disabled = false;
+          document.getElementById('initBtn').disabled = true;
+        } else {
+          document.getElementById('initStatus').textContent = `❌ Error: ${data.message}`;
+        }
+      } catch (error) {
+        document.getElementById('initStatus').textContent = `❌ Error: ${error.message}`;
+      }
+    }
+
+    async function startSession() {
+      try {
+        const response = await fetch(`${API_BASE}/api/voice/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          document.getElementById('startStatus').textContent = `✅ Session started`;
+          document.getElementById('startBtn').disabled = true;
+          document.getElementById('recordBtn').disabled = false;
+          document.getElementById('stopBtn').disabled = false;
+          
+          // Play initial greeting
+          playAudio(data.audio_base64);
+          displayAssistantMessage(data.text);
+        } else {
+          document.getElementById('startStatus').textContent = `❌ Error: ${data.message}`;
+        }
+      } catch (error) {
+        document.getElementById('startStatus').textContent = `❌ Error: ${error.message}`;
+      }
+    }
+
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          audioChunks.push(event.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          document.getElementById('sendBtn').disabled = false;
+        };
+
+        mediaRecorder.start();
+        document.getElementById('recordStatus').innerHTML = '<span class="recording">🔴 Recording...</span>';
+        document.getElementById('recordBtn').disabled = true;
+        document.getElementById('stopRecordBtn').disabled = false;
+      } catch (error) {
+        document.getElementById('recordStatus').textContent = `❌ Error: ${error.message}`;
+      }
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        document.getElementById('recordStatus').textContent = '✅ Recording stopped';
+        document.getElementById('recordBtn').disabled = false;
+        document.getElementById('stopRecordBtn').disabled = true;
+      }
+    }
+
+    async function sendAudio() {
+      if (!audioBlob) {
+        alert('No audio recorded');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('session_id', sessionId);
+      formData.append('audio', audioBlob, 'recording.webm');
+
+      try {
+        document.getElementById('recordStatus').textContent = '⏳ Processing audio...';
+        
+        const response = await fetch(`${API_BASE}/api/voice/process`, {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          document.getElementById('recordStatus').textContent = '✅ Audio processed';
+          
+          // Display transcription
+          const transDiv = document.getElementById('transcription');
+          transDiv.style.display = 'block';
+          transDiv.innerHTML = `<strong>You said:</strong> ${data.transcription}`;
+          displayUserMessage(data.transcription);
+          
+          // Display response
+          const respDiv = document.getElementById('response');
+          respDiv.style.display = 'block';
+          respDiv.innerHTML = `<strong>Patient responded:</strong> ${data.response_text}`;
+          displayAssistantMessage(data.response_text);
+          
+          // Play response audio
+          playAudio(data.audio_base64);
+          
+          document.getElementById('sendBtn').disabled = true;
+          audioBlob = null;
+        } else {
+          document.getElementById('recordStatus').textContent = `❌ Error: ${data.message}`;
+        }
+      } catch (error) {
+        document.getElementById('recordStatus').textContent = `❌ Error: ${error.message}`;
+      }
+    }
+
+    async function stopSession() {
+      try {
+        const response = await fetch(`${API_BASE}/api/voice/stop`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          document.getElementById('stopStatus').textContent = '✅ Session stopped';
+          resetUI();
+        } else {
+          document.getElementById('stopStatus').textContent = `❌ Error: ${data.message}`;
+        }
+      } catch (error) {
+        document.getElementById('stopStatus').textContent = `❌ Error: ${error.message}`;
+      }
+    }
+
+    async function getHistory() {
+      if (!sessionId) {
+        alert('No active session');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/voice/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          const historyDiv = document.getElementById('conversationHistory');
+          historyDiv.innerHTML = '<h3>Conversation:</h3>';
+          
+          data.history.forEach(msg => {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${msg.role}-message`;
+            msgDiv.innerHTML = `<strong>${msg.role === 'user' ? 'Doctor' : 'Patient'}:</strong> ${msg.content}`;
+            historyDiv.appendChild(msgDiv);
+          });
+        }
+      } catch (error) {
+        console.error('Error getting history:', error);
+      }
+    }
+
+    function displayUserMessage(text) {
+      const historyDiv = document.getElementById('conversationHistory');
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'message user-message';
+      msgDiv.innerHTML = `<strong>Doctor:</strong> ${text}`;
+      historyDiv.appendChild(msgDiv);
+      historyDiv.scrollTop = historyDiv.scrollHeight;
+    }
+
+    function displayAssistantMessage(text) {
+      const historyDiv = document.getElementById('conversationHistory');
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'message assistant-message';
+      msgDiv.innerHTML = `<strong>Patient:</strong> ${text}`;
+      historyDiv.appendChild(msgDiv);
+      historyDiv.scrollTop = historyDiv.scrollHeight;
+    }
+
+    function playAudio(base64Audio) {
+      const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+      audio.play().catch(error => {
+        console.error('Error playing audio:', error);
+      });
+    }
+
+    function resetUI() {
+      sessionId = null;
+      document.getElementById('initBtn').disabled = false;
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('recordBtn').disabled = true;
+      document.getElementById('stopRecordBtn').disabled = true;
+      document.getElementById('sendBtn').disabled = true;
+      document.getElementById('stopBtn').disabled = true;
+      document.getElementById('conversationHistory').innerHTML = '';
+    }
+  </script>
+</body>
+</html>
+

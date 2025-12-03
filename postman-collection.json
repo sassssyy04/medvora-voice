@@ -1,0 +1,180 @@
+{
+  "info": {
+    "name": "Medvora Voice API",
+    "description": "HTTP-based Voice API for virtual patient simulations",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8001",
+      "type": "string"
+    },
+    {
+      "key": "session_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "osce_id",
+      "value": "your-osce-id-here",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        },
+        "description": "Check if the API is running and get active session count"
+      },
+      "response": []
+    },
+    {
+      "name": "1. Initialize Session",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const jsonData = pm.response.json();",
+              "    if (jsonData.success && jsonData.session_id) {",
+              "        pm.collectionVariables.set('session_id', jsonData.session_id);",
+              "        console.log('Session ID saved:', jsonData.session_id);",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"gender\": \"Male\",\n  \"osce_id\": \"{{osce_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/voice/init",
+          "host": ["{{base_url}}"],
+          "path": ["api", "voice", "init"]
+        },
+        "description": "Initialize a new voice session with gender and OSCE ID. Returns a session_id to use in subsequent requests."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Start Session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": \"{{session_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/voice/start",
+          "host": ["{{base_url}}"],
+          "path": ["api", "voice", "start"]
+        },
+        "description": "Start the voice session and receive the initial greeting audio"
+      },
+      "response": []
+    },
+    {
+      "name": "3. Process Audio",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "session_id",
+              "value": "{{session_id}}",
+              "type": "text"
+            },
+            {
+              "key": "audio",
+              "type": "file",
+              "src": "/path/to/your/audio/file.webm",
+              "description": "Select an audio file (webm, wav, mp3, mp4, or m4a)"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/voice/process",
+          "host": ["{{base_url}}"],
+          "path": ["api", "voice", "process"]
+        },
+        "description": "Send audio file for transcription and get AI response with audio"
+      },
+      "response": []
+    },
+    {
+      "name": "4. Get Conversation History",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": \"{{session_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/voice/history",
+          "host": ["{{base_url}}"],
+          "path": ["api", "voice", "history"]
+        },
+        "description": "Retrieve the full conversation history for the session"
+      },
+      "response": []
+    },
+    {
+      "name": "5. Stop Session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": \"{{session_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/voice/stop",
+          "host": ["{{base_url}}"],
+          "path": ["api", "voice", "stop"]
+        },
+        "description": "Stop and clean up the voice session"
+      },
+      "response": []
+    }
+  ]
+}
+
