@@ -15,10 +15,17 @@ dotenv.config();
 const app = express();
 
 app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:3001"],
+  origin: [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://40.81.242.167",
+    "https://40.81.242.167",
+    "http://app.medvora.ai",
+    "https://app.medvora.ai"
+  ],
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Origin", "X-Requested-With", "Content-Type", "Accept"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Origin", "X-Requested-With", "Content-Type", "Accept", "Authorization"],
 }));
 
 app.use(express.json({ limit: "100mb" }));
@@ -350,4 +357,5 @@ app.listen(PORT, () => {
   console.log(`   POST http://localhost:${PORT}/api/voice/history`);
   console.log(`   GET  http://localhost:${PORT}/health`);
 });
+
 

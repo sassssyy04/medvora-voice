@@ -41,4 +41,3 @@ module.exports = (sequelize, Sequelize) => {
 
   return virtual_patient_simulations;
 };
-

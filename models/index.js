@@ -26,3 +26,4 @@ db.virtual_patient_simulations = require("./virtual_patient_simulation/virtual_p
 
 module.exports = db;
 
+
